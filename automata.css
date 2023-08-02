@@ -1,0 +1,74 @@
+body {
+  margin: 0px;
+  height: 100vh;
+  width: 100vw;
+  background-color: cornsilk;
+  overflow: hidden;
+}
+
+#controls {
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+}
+
+.controllables {
+  position: absolute;
+  font-size: 20px;
+  font-family: 'Times New Roman', Times, serif;
+  user-select: none;
+}
+
+#play {
+  bottom: 10px;
+  left: 10px;
+  width: 60px;
+}
+
+#step {
+  bottom: 10px;
+  left: 80px;
+  width: 60px;
+}
+
+#speed {
+  left: 10px;
+  bottom: 50px;
+}
+
+#toolbox {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  width: 20px;
+  height: 100vh;
+  
+  background-color: grey;
+  border-left: solid black 4px;
+
+  transition-property: width;
+  transition-duration: 100ms;
+
+  z-index: 10;
+}
+
+#toolbox:hover {
+  width: 150px;
+}
+
+#toolbox > canvas {
+  background-color: lightgrey;
+}
+
+#pibox {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: calc(100vw - 24px);
+  height: 100vh;
+}
+
+.tiles {
+  background-color: cornsilk;
+}
+
