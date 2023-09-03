@@ -8,8 +8,6 @@ import { LoopMatrix, Matrix, RGB } from "./utils.js";
 
 const $ = document.querySelector.bind(document);
 
-const p = new Pattern(new Matrix(2,1, new RGB(0,0,0), new RGB(255,255,255)));
-
 const tiles = new Tiles({
   rows: 10,
   cols: 10,

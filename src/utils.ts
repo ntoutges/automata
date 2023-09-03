@@ -69,6 +69,25 @@ export function generateRGBWithinRange(
   );
 }
 
+export function generateMonochromeRGBWithinRange(
+  rgbA: UnclampedRGB,
+  rgbB: UnclampedRGB,
+  modifier: number // between 0 and 1
+): UnclampedRGB {
+  const minR = Math.min(rgbA.r, rgbB.r);
+  const maxR = Math.max(rgbA.r, rgbB.r);
+  const minG = Math.min(rgbA.g, rgbB.g);
+  const maxG = Math.max(rgbA.g, rgbB.g);
+  const minB = Math.min(rgbA.b, rgbB.b);
+  const maxB = Math.max(rgbA.b, rgbB.b);
+
+  return new UnclampedRGB(
+    minR + Math.floor(modifier * (maxR - minR)),
+    minG + Math.floor(modifier * (maxG - minG)),
+    minB + Math.floor(modifier * (maxB - minB))
+  );
+}
+
 export function isRGBWithinRange(
   rgbTest: UnclampedRGB,
   rgbA: UnclampedRGB,

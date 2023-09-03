@@ -1,5 +1,5 @@
 import { Materials } from "./interface.js";
-import { Pattern, PatternRange } from "./patterns.js";
+import { Pattern, PatternRange, PatternRangeLinear } from "./patterns.js";
 import { PatternSet } from "./rule-patterns.js";
 import { MovementRule, QuantumRule, Rule, SequenceRule, SpatialRule, SurroundingRule } from "./rules.js";
 import { Matrix, RGB } from "./utils.js";
@@ -14,12 +14,12 @@ export var materials: Materials;
 // sand
 // const sand = new Pattern( new RGB(234, 234, 133) );
 // const sand = new Pattern( new RGB(255, 192, 203) ); // pink sand!
-const sand = new PatternRange(
+const sand = new PatternRangeLinear(
   new Pattern(
-    new RGB(100,100,100)
+    new RGB(255,237,167)
   ),
   new Pattern(
-    new RGB(255,255,255)
+    new RGB(203,195,162)
   )
 );
 
