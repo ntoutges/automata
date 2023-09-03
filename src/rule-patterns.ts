@@ -54,3 +54,16 @@ export class PatternSet extends RulePattern {
     return new PatternSet(patterns);
   }
 }
+
+// matches anything OUTSIDE the set
+export class NegatedPatternSet extends PatternSet {
+  matches(pattern: PatternBase) {
+    if (this.patterns.length == 0) return true; // no need to check
+
+    // innocent until proven guilty method
+    for (const testPattern of this.patterns) {
+    if (testPattern.equals(pattern)) return false;
+    }
+    return true;
+  }
+}

@@ -121,7 +121,7 @@ export class SpatialRule extends Rule {
       for (const diff of this.dynaDiffs[i] as dDiff[]) {
         const collapse = diff.p();
         // difference
-        if (collapse != tiles.getAt(diff.x, diff.y).getPattern()) {
+        if (!collapse.equals(tiles.getAt(x+diff.x, y+diff.y)?.getDisplayPattern())) {
           dynaDiffCollapse.push({
             x: diff.x,
             y: diff.y,

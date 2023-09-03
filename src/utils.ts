@@ -105,6 +105,43 @@ export function isRGBWithinRange(
   && rgbTest.b >= minB && rgbTest.b <= maxB;
 }
 
+export function isMonochromeRGBWithinRange(
+  rgbTest: UnclampedRGB,
+  rgbA: UnclampedRGB,
+  rgbB: UnclampedRGB
+) {
+  const minR = Math.min(rgbA.r, rgbB.r);
+  const maxR = Math.max(rgbA.r, rgbB.r);
+  const minG = Math.min(rgbA.g, rgbB.g);
+  const maxG = Math.max(rgbA.g, rgbB.g);
+  const minB = Math.min(rgbA.b, rgbB.b);
+  const maxB = Math.max(rgbA.b, rgbB.b);
+
+  // outside bounds of rgbA and rgbB, automatically false
+  if (
+    rgbTest.r < minR || rgbTest.r > maxR
+    || rgbTest.g < minG || rgbTest.g > maxG
+    || rgbTest.b < minB || rgbTest.b > maxB
+  ) { return false; }
+
+  const deltaR = maxR - minR;
+  const deltaG = maxG - minG;
+  const deltaB = maxB - minB;
+
+  // "measured" values
+  const mR = (rgbTest.r - minR) / deltaR;
+  const mB = (rgbTest.g - minG) / deltaG;
+  const mG = (rgbTest.b - minB) / deltaB;
+
+  // sum two highest inaccuracy delta values
+  const acc = [1/deltaR, 1/deltaG, 1/deltaB].sort();
+  const err = acc[1] + acc[2];
+
+  // assume rAdj is perfect, and base all off that
+
+  return mG + err > mR && mG - err < mR && mB + err > mR && mB - err < mR;
+}
+
 export class Matrix<T> {
   private readonly data: Array<Array<T>> = [];
   private widthQ: number;

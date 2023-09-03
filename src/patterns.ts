@@ -1,4 +1,4 @@
-import { Matrix, RGB, UnclampedRGB, generateMonochromeRGBWithinRange, generateRGBWithinRange, getLCMFactors, isRGBWithinRange } from "./utils.js";
+import { Matrix, RGB, UnclampedRGB, generateMonochromeRGBWithinRange, generateRGBWithinRange, getLCMFactors, isMonochromeRGBWithinRange, isRGBWithinRange } from "./utils.js";
 
 export abstract class PatternBase {
   abstract equals(other: PatternBase): boolean;
@@ -91,7 +91,7 @@ export class Pattern extends CollapsedPattern {
       }
       return true;
     }
-    return other.equals(this); // other instanceof QuantumPattern (force quantum pattern implementation to handle this)
+    return other?.equals(this); // other instanceof QuantumPattern (force quantum pattern implementation to handle this)
   }
 
   getXInverted() { return new Pattern(this.colors.getXInverted()); }
@@ -192,7 +192,7 @@ export class PatternRange extends QuantumPattern {
 }
 
 // all rgb values change linearly
-export class PatternRangeLinear extends PatternRange {
+export class PatternRangeMonochrome extends PatternRange {
   equals(other: PatternBase) {
     if (other instanceof CollapsedPattern) { // check if all RGB values within range
       const patternA = this.getPatternA();
@@ -203,7 +203,7 @@ export class PatternRangeLinear extends PatternRange {
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
           if (
-            !isRGBWithinRange(
+            !isMonochromeRGBWithinRange(
               other.getColor(x,y),
               patternA.getColor(x,y),
               patternB.getColor(x,y)
@@ -214,7 +214,7 @@ export class PatternRangeLinear extends PatternRange {
       return true;
     }
     else { // other instanceof QuantumPattern // check if all same type, if so, check if same patternA and patternB values
-      if (other instanceof PatternRangeLinear) return this.getPatternA().equals(other.getPatternA()) && this.getPatternB().equals(other.getPatternB());
+      if (other instanceof PatternRangeMonochrome) return this.getPatternA().equals(other.getPatternA()) && this.getPatternB().equals(other.getPatternB());
       return false; // not the same type of pattern, so immediatly different
     }
   }

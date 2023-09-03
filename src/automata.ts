@@ -27,6 +27,7 @@ tiles.onClick((tile) => {
     materials.getSelectedPattern().collapse()
   );
   tiles.render([tiles.getClickedTileLocation()]);
+  didRenderFullScreen = false;
   
   willClicking  = true;
   isClickingTimeout = setTimeout(() => { // add slight delay to continuous clicking, to allow easy single clicks
@@ -63,6 +64,7 @@ setInterval(() => {
       materials.getSelectedPattern().collapse()
     );
     tiles.render([tiles.getClickedTileLocation()]);
+    didRenderFullScreen = false;
   }
 }, 10);
 
@@ -109,9 +111,17 @@ function stepPause() {
   if (!interval.isPaused) play();
 }
 
+let didRenderFullScreen = false;
 function step() {
   const updateData = sim.tickAll();
-  tiles.render(updateData.diffs);
+  if (updateData.diffs.length) { // only render needed
+    tiles.render(updateData.diffs);
+    didRenderFullScreen = false;
+  }
+  else if (!didRenderFullScreen) { // render all
+    tiles.render();
+    didRenderFullScreen = true;
+  }
   tiles.runAnimation(updateData.anims);
 }
 
