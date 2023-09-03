@@ -1,5 +1,5 @@
 import { Materials } from "./interface.js";
-import { Pattern, PatternRange, PatternRangeMonochrome } from "./patterns.js";
+import { Pattern, PatternAddative, PatternRange, PatternRangeMonochrome } from "./patterns.js";
 import { NegatedPatternSet, PatternSet } from "./rule-patterns.js";
 import { MovementRule, QuantumRule, Rule, SequenceRule, SpatialRule, SurroundingRule } from "./rules.js";
 import { Matrix, RGB } from "./utils.js";
@@ -24,6 +24,16 @@ const sand = new PatternRangeMonochrome(
 )
 const deleter = new Pattern(
   new RGB(230, 20,40)
+);
+const allDeleters = new PatternRange(
+  deleter,
+  new Pattern(
+    new RGB(230,255,40)
+  )
+)
+
+const delAdd = new Pattern(
+  new RGB(0,1,0)
 );
 
 // const sandL = new Pattern( new Matrix( 2,1, new RGB(0,0,0), new RGB(234, 234, 133) ) );
@@ -159,7 +169,7 @@ materials = new Materials(
         new PatternSet([ ]),
         
         new PatternSet([ ]),
-        new PatternSet([ deleter ])
+        new PatternSet([ allDeleters ])
       ),
       new Matrix(
         3,3,
@@ -174,6 +184,28 @@ materials = new Materials(
         new PatternSet([ air ]),
         new PatternSet([ air ]),
         new PatternSet([ air ])
+      )
+    )
+  )
+
+  rules.push(
+    new SurroundingRule({
+      centralBefore: new PatternSet([ allDeleters ]),
+      centralAfter: new PatternSet([ new PatternAddative(delAdd) ]),
+      surrounding: new PatternSet([ sand ]),
+      validCounts: [1,2,3,4,5,6,7,8],
+      includeCorners: true,
+      includeSides: true
+    })
+  )
+
+  rules.push(
+    new SpatialRule(
+      new Matrix(
+        1,1, new PatternSet([ new Pattern( new RGB(230,255,40) ) ])
+      ),
+      new Matrix(
+        1,1, new PatternSet([ stone ])
       )
     )
   )

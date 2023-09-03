@@ -31,6 +31,14 @@ export class UnclampedRGB {
     )
   }
 
+  add(other: UnclampedRGB) {
+    return new UnclampedRGB(
+      this.r + other.r,
+      this.g + other.g,
+      this.b + other.b
+    );
+  }
+
   equals(other: UnclampedRGB): boolean {
     return this.r == other.r && this.g == other.g && this.b == other.b;
   }
@@ -46,6 +54,14 @@ export class RGB extends UnclampedRGB {
       Math.min(Math.max(Math.floor(r), 0), 255),
       Math.min(Math.max(Math.floor(g), 0), 255),
       Math.min(Math.max(Math.floor(b), 0), 255)
+    );
+  }
+
+  add(other: RGB) {
+    return new RGB(
+      this.r + other.r,
+      this.g + other.g,
+      this.b + other.b
     );
   }
 }
@@ -457,7 +473,7 @@ export class Tile {
   setPattern(pattern: PatternBase): boolean {
     const oldPattern = this.displayPattern;
     this.actualPattern = pattern;
-    this.displayPattern = pattern.collapse();
+    this.displayPattern = pattern.collapse(oldPattern);
     return pattern.equals(oldPattern);
   }
   getPattern() { return this.actualPattern; }

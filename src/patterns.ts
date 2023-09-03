@@ -5,7 +5,7 @@ export abstract class PatternBase {
   abstract getXInverted(): PatternBase;
   abstract getYInverted(): PatternBase;
 
-  abstract collapse(): CollapsedPattern;
+  abstract collapse(oldPattern: CollapsedPattern): CollapsedPattern;
 }
 
 export abstract class QuantumPattern extends PatternBase { // represents multiple different patterns, but is not one pattern specifically
@@ -23,7 +23,7 @@ export abstract class CollapsedPattern extends PatternBase { // represents one s
   abstract getColor(x: number, y: number): UnclampedRGB;
   getColors() { return this.colors; }
 
-  collapse() { return this; } // collapsed pattern, when collapsing, just returns itself
+  collapse(oldPattern: CollapsedPattern) { return this; } // collapsed pattern, when collapsing, just returns itself
 }
 
 export class Pattern extends CollapsedPattern {
@@ -157,7 +157,7 @@ export class PatternRange extends QuantumPattern {
     }
   }
 
-  collapse() {
+  collapse(oldPattern: CollapsedPattern) {
     const width = this.patternA.getColors().width;
     const height = this.patternA.getColors().height;
     
@@ -219,7 +219,7 @@ export class PatternRangeMonochrome extends PatternRange {
     }
   }
 
-  collapse() {
+  collapse(oldPattern: CollapsedPattern) {
     const patternA = this.getPatternA();
     const patternB = this.getPatternB();
 
@@ -242,5 +242,68 @@ export class PatternRangeMonochrome extends PatternRange {
     }
 
     return new Pattern( colors );
+  }
+}
+
+export class PatternAddative extends QuantumPattern {
+  private pattern: Pattern;
+
+  constructor(
+    pattern: Pattern
+  ) {
+    super();
+    this.pattern = pattern;
+  }
+
+  getPattern() { return this.pattern; }
+
+  // checks if all other pattern values >= this pattern value
+  equals(other: PatternBase) {
+    if (other instanceof CollapsedPattern) { // check if all RGB values within range
+      const width = this.pattern.getColors().width;
+      const height = this.pattern.getColors().height;
+      for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+          const thisColor = this.pattern.getColor(x,y);
+          const otherColor = other.getColor(x,y);
+          if (
+            otherColor.r < thisColor.g
+            || otherColor.g < thisColor.g
+            || otherColor.b < thisColor.b
+          ) return false; // component too small, therefore couldn't have been amde with this pattern
+        }
+      }
+      return true;
+    }
+    else { // other instanceof QuantumPattern // check if all same type, if so, check if same patternA and patternB values
+      if (other instanceof PatternAddative) return this.pattern.equals(other.getPattern());
+      return false; // not the same type of pattern, so immediatly different
+    }
+  }
+
+  collapse(oldPattern: CollapsedPattern) {
+    const width = this.pattern.getColors().width;
+    const height = this.pattern.getColors().height;
+    
+    const colors = new Matrix<UnclampedRGB>(width,height);
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        colors.setAt(
+          oldPattern.getColor(x,y).add(
+            this.pattern.getColor(x,y)
+          ),
+          x,y
+        );
+      }
+    }
+
+    return new Pattern( colors );
+  }
+
+  getXInverted() {
+    return new PatternAddative( this.pattern.getXInverted() );
+  }
+  getYInverted() {
+    return new PatternAddative( this.pattern.getYInverted() );
   }
 }

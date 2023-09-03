@@ -6,6 +6,8 @@ import { SmartInterval } from "./smartInterval.js";
 import { materials, rules } from "./user-rules.js";
 import { LoopMatrix, Matrix, RGB } from "./utils.js";
 
+const nullPattern = new Pattern(new RGB(0,0,0));
+
 const $ = document.querySelector.bind(document);
 
 const tiles = new Tiles({
@@ -24,7 +26,7 @@ let isClickingTimeout: number;
 tiles.autosize(0,0,true);
 tiles.onClick((tile) => {
   tile.setPattern(
-    materials.getSelectedPattern().collapse()
+    materials.getSelectedPattern().collapse(nullPattern)
   );
   tiles.render([tiles.getClickedTileLocation()]);
   didRenderFullScreen = false;
@@ -61,7 +63,7 @@ setInterval(() => {
   if (isClicking) {
     const [x,y] = tiles.getClickedTileLocation();
     tiles.tiles.getAt(x,y)?.setPattern(
-      materials.getSelectedPattern().collapse()
+      materials.getSelectedPattern().collapse(nullPattern)
     );
     tiles.render([tiles.getClickedTileLocation()]);
     didRenderFullScreen = false;

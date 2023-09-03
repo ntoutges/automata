@@ -74,7 +74,7 @@ export class Simulation {
     for (const index in this.differences) {
       const [x,y] = this.toCoord(+index);
       if (!this.hiddenDifferences.has(+index)) diffArray.push([x,y]); // only push difference if not being hidden
-      this.tiles.getAt( x,y, null )?.setPattern( this.differences[index].collapse() );
+      this.tiles.getAt( x,y, null )?.setPattern( this.differences[index].collapse(this.tiles.getAt(x,y).getDisplayPattern()) );
     }
     this.differences = {};
     return diffArray;

@@ -1,4 +1,4 @@
-import { Pattern } from "./patterns.js";
+import { Pattern, QuantumPattern } from "./patterns.js";
 import { RulePattern } from "./rule-patterns.js";
 import { Matrix, Tile, UnclampedRGB, cDiff, dDiff, ddDiff, dmDiff, isCDiff, mDiff, rDiff } from "./utils.js";
 
@@ -171,7 +171,10 @@ export class SurroundingRule extends Rule {
 
     if (centralAfter.possibilities == 0) return;
     if (centralAfter.possibilities == 1 && centralBefore.possibilities == 1) {
-      if (!centralAfter.getPattern().equals(centralBefore.getPattern())) {
+      if (
+        !centralAfter.getPattern().equals(centralBefore.getPattern()) // different at end than start
+        || centralAfter.getPattern() instanceof QuantumPattern // always different
+      ) {
         this.constDiffs.push([{
           x: 0, y: 0,
           p: centralAfter.getPattern()
