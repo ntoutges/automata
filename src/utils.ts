@@ -259,8 +259,9 @@ export class LoopMatrix<T> extends Matrix<T> {
 
 interface DraggableInterface {
   el: HTMLElement
-  onClick: (e: MouseEvent) => void
-  onRender: () => any
+  onClick?: (e: MouseEvent) => void
+  onUnClick?: (e: MouseEvent) => void,
+  onRender?: () => any
   lockX?: boolean
   lockY?: boolean,
   scale?: number,
@@ -282,6 +283,7 @@ export class Draggable {
   private didDrag: boolean = false;
 
   private readonly onClick: (e: MouseEvent) => void;
+  private readonly onUnClick: (e: MouseEvent) => void;
   private readonly onRender: () => any;
 
   private lockX: boolean;
@@ -291,6 +293,7 @@ export class Draggable {
   constructor({
     el,
     onClick = () => {},
+    onUnClick = () => {},
     onRender = () => {},
     lockX = false,
     lockY = false,
@@ -308,6 +311,7 @@ export class Draggable {
     if (doScroll) el.addEventListener("wheel", this.doScroll.bind(this));
 
     this.onClick = onClick;
+    this.onUnClick = onUnClick;
     this.onRender = onRender;
 
     this.lockX = lockX;
@@ -348,6 +352,7 @@ export class Draggable {
   }
   onmouseup(e: MouseEvent) {
     if (this.isDragging && !this.didDrag) this.onClick(e); // consider it a click if mouse pressed and released without moving
+    this.onUnClick(e); // consider unclick if mouse moved (thus, click event fired...?)
     this.isDragging = false;
     this.isDrawing = false;
   }
@@ -357,11 +362,13 @@ export class Draggable {
       this.scale *= 0.9;
       this.offX = ((this.offX + e.pageX) * 0.9) - e.pageX;
       this.offY = ((this.offY + e.pageY) * 0.9) - e.pageY;
+      this.onRender();
     }
     else if (e.deltaY < 0) { // scroll in
       this.scale /= 0.9;
       this.offX = ((this.offX + e.pageX) / 0.9) - e.pageX;
       this.offY = ((this.offY + e.pageY) / 0.9) - e.pageY;
+      this.onRender();
     }
   }
 

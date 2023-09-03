@@ -28,6 +28,7 @@ export class Tileable extends Element {
   readonly padding: number;
 
   private clickListeners: Array<(tile: Tile) => void> = [];
+  private unClickListeners: Array<() => void> = [];
   private animationsOverlay: TileAnimations = null;
 
   readonly tiles: Matrix<Tile>;
@@ -142,9 +143,15 @@ export class Tileable extends Element {
     return this.tiles.getAt(tileX,tileY, null);
   }
 
-  onClick(listener: (tile: Tile) => void) { this.clickListeners.push(listener); }
+  onClick(listener: (tile: Tile) => void) {
+    this.clickListeners.push(listener);
+  }
+  onUnClick(listener: () => void) {
+    this.unClickListeners.push(listener);
+  }
 
-  alertListeners(tile: Tile) { this.clickListeners.forEach(listener => listener(tile)); }
+  alertClickListeners(tile: Tile) { this.clickListeners.forEach(listener => listener(tile)); }
+  alertUnClickListeners() { this.unClickListeners.forEach(listener => listener()); }
 
   autosize(width=0, height=0, init:boolean=false) {
     const parent = this.el.parentElement;
@@ -188,6 +195,9 @@ interface TilesInterface {
 }
 
 export class Tiles extends Tileable {
+  private clickedX: number;
+  private clickedY: number;
+
   constructor({
     cols,
     rows,
@@ -212,9 +222,11 @@ export class Tiles extends Tileable {
     this.draggable = new Draggable({
       el: this.canvas,
       onClick: (e: MouseEvent) => {
-        const tile = this.getClickedTile(e.pageX, e.pageY);
-        if (tile) this.alertListeners(tile);
+        [this.clickedX, this.clickedY] = this.getClickedTileId(e.pageX, e.pageY);
+        const tile = this.tiles.getAt(this.clickedX,this.clickedY, null);
+        if (tile) this.alertClickListeners(tile);
       },
+      onUnClick: (e: MouseEvent) => { this.alertUnClickListeners(); },
       onRender: this.render.bind(this),
       doScroll: true
     });
@@ -227,6 +239,10 @@ export class Tiles extends Tileable {
     }
 
     this.render();
+  }
+
+  getClickedTileLocation(): [x:number, y:number] {
+    return [this.clickedX, this.clickedY];
   }
 }
 

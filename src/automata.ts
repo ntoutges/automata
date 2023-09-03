@@ -9,8 +9,8 @@ import { LoopMatrix, Matrix, RGB } from "./utils.js";
 const $ = document.querySelector.bind(document);
 
 const tiles = new Tiles({
-  rows: 10,
-  cols: 10,
+  rows: 50,
+  cols: 50,
   padding: 0.5,
   looping: false,
   doAnimations: true
@@ -18,12 +18,26 @@ const tiles = new Tiles({
 
 tiles.appendTo($("#pibox"));
 
+let isClicking = false;
+let willClicking = false;
+let isClickingTimeout: number;
 tiles.autosize(0,0,true);
 tiles.onClick((tile) => {
   tile.setPattern(
     materials.getSelectedPattern().collapse()
   );
-  tiles.render();
+  tiles.render([tiles.getClickedTileLocation()]);
+  
+  willClicking  = true;
+  isClickingTimeout = setTimeout(() => { // add slight delay to continuous clicking, to allow easy single clicks
+    if (!willClicking) clearTimeout(isClickingTimeout);
+    else isClicking = true;
+  }, 200);
+});
+
+tiles.onUnClick(() => {
+  willClicking = false;
+  isClicking = false;
 });
 
 materials.appendTo($("#toolbox"));
@@ -42,6 +56,14 @@ const interval = new SmartInterval(
 
 setInterval(() => {
   tiles.renderAnimation();
+
+  if (isClicking) {
+    const [x,y] = tiles.getClickedTileLocation();
+    tiles.tiles.getAt(x,y)?.setPattern(
+      materials.getSelectedPattern().collapse()
+    );
+    tiles.render([tiles.getClickedTileLocation()]);
+  }
 }, 10);
 
 $("#play").addEventListener("click", play);

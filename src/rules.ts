@@ -303,7 +303,7 @@ export class SequenceRule extends Rule {
     for (const rule of this.rules) {
       const diffs = rule.checkAt(x,y, tiles);
       if (diffs.length > 0) { // first rule that matches returns its differences, the rest don't matter in that step
-        console.log(this.rules.indexOf(rule),  x,y)
+        // console.log(this.rules.indexOf(rule),  x,y)
         return diffs;
       }
     }
