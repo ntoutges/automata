@@ -1,26 +1,29 @@
-import { Materials, Tiles } from "./interface.js";
+import { Materials, TileAnimations, Tiles } from "./interface.js";
+import { Pattern } from "./patterns.js";
 import { SpatialRule, SurroundingRule } from "./rules.js";
 import { Simulation } from "./sim.js";
 import { SmartInterval } from "./smartInterval.js";
 import { materials, rules } from "./user-rules.js";
-import { LoopMatrix, Matrix, Pattern, PatternSet, RGB, RulePattern } from "./utils.js";
+import { LoopMatrix, Matrix, RGB } from "./utils.js";
 
 const $ = document.querySelector.bind(document);
 
 const p = new Pattern(new Matrix(2,1, new RGB(0,0,0), new RGB(255,255,255)));
 
 const tiles = new Tiles({
-  rows: 50,
-  cols: 50,
+  rows: 10,
+  cols: 10,
   padding: 0.5,
-  looping: true
+  looping: false,
+  doAnimations: true
 });
+
 tiles.appendTo($("#pibox"));
 
 tiles.autosize(0,0,true);
 tiles.onClick((tile) => {
   tile.setPattern(
-    materials.getSelectedPattern()
+    materials.getSelectedPattern().collapse()
   );
   tiles.render();
 });
@@ -34,14 +37,17 @@ const sim = new Simulation(tiles.tiles, rules);
 const interval = new SmartInterval(
   () => {
     // tiles.render( sim.tickAll() );
-    sim.tickAll();
-    tiles.render();
+    step();
   },
   100
 );
 
+setInterval(() => {
+  tiles.renderAnimation();
+}, 10);
+
 $("#play").addEventListener("click", play);
-$("#step").addEventListener("click", step);
+$("#step").addEventListener("click", stepPause);
 document.addEventListener("keydown", (e) => {
   const speedStep = (e.ctrlKey) ? 10 : 1;
   switch (e.key) {
@@ -49,7 +55,7 @@ document.addEventListener("keydown", (e) => {
       play();
       break;
     case ".": // right arrow
-      step();
+    stepPause();
       break;
     case "ArrowUp":
       $("#speed").value = Math.min(+$("#speed").value + speedStep, 100);
@@ -78,14 +84,19 @@ function play() {
   }
 }
 
+function stepPause() {
+  step();
+  if (!interval.isPaused) play();
+}
+
 function step() {
-  sim.tickAll();
-  tiles.render();
-  interval.pause();
+  const updateData = sim.tickAll();
+  tiles.render(updateData.diffs);
+  tiles.runAnimation(updateData.anims);
 }
 
 function setSpeed() {
-  interval.setInterval(
-    Math.max(1000 - ((+$("#speed").value) * 10), 1) 
-  );
+  const period = Math.max(1000 - ((+$("#speed").value) * 10), 1);
+  interval.setInterval(period);
+  tiles.setAnimationSpeed(period);
 }

@@ -1,17 +1,19 @@
-import { Matrix, Pattern, RulePattern, Tile, UnclampedRGB, cDiff, dDiff } from "./utils.js";
+import { Pattern } from "./patterns.js";
+import { RulePattern } from "./rule-patterns.js";
+import { Matrix, Tile, UnclampedRGB, cDiff, dDiff, ddDiff, dmDiff, isCDiff, mDiff, rDiff } from "./utils.js";
 
 const ruleFallback = new Tile();
 ruleFallback.setPattern( new Pattern(new UnclampedRGB(0,0,1000)) );
 export abstract class Rule {
   readonly width: number;
   readonly height: number;
-  constDiffs: cDiff[][] = []; // list of all rule possibilities -> list of precomputed constant differences
-  dynaDiffs: dDiff[][] = []; // list of all rule possibilities -> list of callbacks to differences that need to be computed at runtime
+  constDiffs: rDiff[][] = []; // list of all rule possibilities -> list of precomputed constant differences
+  dynaDiffs: ddDiff[][] = []; // list of all rule possibilities -> list of callbacks to differences that need to be computed at runtime
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
   }
-  abstract checkAt(x: number, y: number, tiles: Matrix<Tile>): cDiff[];
+  abstract checkAt(x: number, y: number, tiles: Matrix<Tile>): rDiff[];
 }
 
 export class SpatialRule extends Rule {
@@ -116,7 +118,7 @@ export class SpatialRule extends Rule {
       // pattern is valid, push to list
       
       const dynaDiffCollapse: cDiff[] = [];
-      for (const diff of this.dynaDiffs[i]) {
+      for (const diff of this.dynaDiffs[i] as dDiff[]) {
         const collapse = diff.p();
         // difference
         if (collapse != tiles.getAt(diff.x, diff.y).getPattern()) {
@@ -138,26 +140,23 @@ interface SurroundingRuleInterface {
   centralBefore: RulePattern
   centralAfter: RulePattern
   surrounding: RulePattern
-  min?: number,
-  max?: number
+  validCounts: number[]
   includeSides?: boolean
   includeCorners?: boolean
-}
+};
 
 export class SurroundingRule extends Rule {
   centralBefore: RulePattern;
   centralAfter: RulePattern;
   surrounding: RulePattern;
-  min: number;
-  max: number
+  validCounts: Set<number>;
   sides: boolean;
   corners: boolean;
   constructor({
     centralBefore,
     centralAfter,
     surrounding,
-    min=1,
-    max=8,
+    validCounts,
     includeSides = true,
     includeCorners = true
   }: SurroundingRuleInterface) {
@@ -165,10 +164,10 @@ export class SurroundingRule extends Rule {
     this.centralBefore = centralBefore;
     this.centralAfter = centralAfter;
     this.surrounding = surrounding;
-    this.min = min;
-    this.max = max;
     this.sides = includeSides;
     this.corners = includeCorners;
+
+    this.validCounts = new Set<number>(validCounts);
 
     if (centralAfter.possibilities == 0) return;
     if (centralAfter.possibilities == 1 && centralBefore.possibilities == 1) {
@@ -204,9 +203,9 @@ export class SurroundingRule extends Rule {
       count += +this.surrounding.matches(tiles.getAt(x+1,y,ruleFallback).getPattern());
     }
     
-    if (count >= this.min && count <= this.max) {
+    if (this.validCounts.has(count)) {
       if (this.dynaDiffs.length > 0) { // length = 1
-        const pattern = this.dynaDiffs[0][0].p();
+        const pattern = (this.dynaDiffs[0][0] as dDiff).p();
         // no need to push difference if equal
         if (!pattern.equals(this.centralBefore.getPattern())) {
           return [{
@@ -221,5 +220,128 @@ export class SurroundingRule extends Rule {
       }
     }
     return [];
+  }
+}
+
+export class MovementRule extends Rule {
+  private condition: Rule;
+
+  constructor(
+    condition: Rule,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number
+  ) {
+    super(condition.width, condition.height);
+
+    // for (const dynaDiff of condition.dynaDiffs) { this.dynaDiffs.push(dynaDiff); }
+    // for (const constDiff of condition.constDiffs) { this.constDiffs.push(constDiff); }
+    this.condition = condition;
+
+    const diff: dmDiff = {
+      xi: fromX,
+      yi: fromY,
+      x: toX,
+      y: toY 
+    };
+    this.dynaDiffs.push([diff]);
+  }
+
+  checkAt(
+    x: number,
+    y: number,
+    tiles: Matrix<Tile>
+  ) {
+    const rDiffs = this.condition.checkAt(x,y,tiles);
+    if (rDiffs.length == 0) return []; // no differences means rule true, ignore
+    
+    const move = this.dynaDiffs[0][0] as dmDiff;
+    for (const i in rDiffs) { // remove rDiff that replaces tile where the moved tile will end at
+      if (rDiffs[i].x == move.x && rDiffs[i].y == move.y) {
+        rDiffs.splice(+i,1);
+        break;
+      }
+    }
+
+    const cDiff: mDiff = {
+      xi: move.xi,
+      yi: move.yi,
+      x: move.x,
+      y: move.y,
+      p: tiles.getAt(x+move.xi, y+move.yi).getDisplayPattern()
+    };
+    rDiffs.push(cDiff);
+    
+    return rDiffs;
+  }
+}
+
+// go through rules sequentially, and perform only the first one that matches
+export class SequenceRule extends Rule {
+  private rules: Rule[];
+  constructor(
+    rules: Rule[]
+  ) {
+    let maxWidth = 0;
+    let maxHeight = 0;
+
+    rules.forEach((rule) => {
+      maxWidth = Math.max(maxWidth, rule.width);
+      maxHeight = Math.max(maxHeight, rule.height);
+    });
+
+    super(maxWidth, maxHeight);
+    this.rules = rules;
+  }
+
+  checkAt(
+    x: number,
+    y: number,
+    tiles: Matrix<Tile>
+  ): rDiff[] {
+    for (const rule of this.rules) {
+      const diffs = rule.checkAt(x,y, tiles);
+      if (diffs.length > 0) { // first rule that matches returns its differences, the rest don't matter in that step
+        console.log(this.rules.indexOf(rule),  x,y)
+        return diffs;
+      }
+    }
+    return []; // by default, nothing happened
+  }
+}
+
+// chooses a random rule until it works (or all fail), then performs that one
+export class QuantumRule extends Rule {
+  private rules: Rule[];
+  constructor(
+    rules: Rule[]
+  ) {
+    let maxWidth = 0;
+    let maxHeight = 0;
+
+    rules.forEach((rule) => {
+      maxWidth = Math.max(maxWidth, rule.width);
+      maxHeight = Math.max(maxHeight, rule.height);
+    });
+
+    super(maxWidth, maxHeight);
+    this.rules = rules;
+  }
+
+  checkAt(
+    x: number,
+    y: number,
+    tiles: Matrix<Tile>
+  ): rDiff[] {
+    let allDiffs: rDiff[][] = [];
+    for (const rule of this.rules) {
+      const diffs = rule.checkAt(x,y, tiles);
+      if (diffs.length > 0) allDiffs.push(diffs);
+    }
+    
+    if (allDiffs.length > 0) return allDiffs[Math.floor(Math.random() * allDiffs.length)];
+
+    return []; // by default, nothing happened
   }
 }

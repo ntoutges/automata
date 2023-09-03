@@ -1,3 +1,5 @@
+import { CollapsedPattern, Pattern, PatternBase } from "./patterns.js";
+
 export class UnclampedRGB {
   readonly r: number;
   readonly g: number;
@@ -48,72 +50,40 @@ export class RGB extends UnclampedRGB {
   }
 }
 
-export class Pattern {
-  private colors: Matrix<UnclampedRGB>;
-  constructor(
-    colors: Matrix<UnclampedRGB> | UnclampedRGB,
-    fallback: UnclampedRGB = new RGB(0,0,0)
-  ) {
-    // make a 1x1 matrix of just RGB
-    if (colors instanceof UnclampedRGB) {
-      const color = colors;
-      colors = new Matrix(1,1);
-      colors.setAt(color, 0,0);
-    }
+// returns a new RGB whose R,G,B values are within the range set by the two input RGBs
+export function generateRGBWithinRange(
+  rgbA: UnclampedRGB,
+  rgbB: UnclampedRGB
+): UnclampedRGB {
+  const minR = Math.min(rgbA.r, rgbB.r);
+  const maxR = Math.max(rgbA.r, rgbB.r);
+  const minG = Math.min(rgbA.g, rgbB.g);
+  const maxG = Math.max(rgbA.g, rgbB.g);
+  const minB = Math.min(rgbA.b, rgbB.b);
+  const maxB = Math.max(rgbA.b, rgbB.b);
 
-    this.colors = colors;
+  return new UnclampedRGB(
+    minR + Math.floor(Math.random() * (maxR - minR)),
+    minG + Math.floor(Math.random() * (maxG - minG)),
+    minB + Math.floor(Math.random() * (maxB - minB))
+  );
+}
 
-    // fill any empty spots with the fallback value
-    for (let x = 0; x < colors.width; x++) {
-      for (let y = 0; y < colors.height; y++) {
-        if (this.colors.getAt(x,y) == null) {
-          this.colors.setAt(fallback, x,y);
-        }
-      }
-    }
-  }
+export function isRGBWithinRange(
+  rgbTest: UnclampedRGB,
+  rgbA: UnclampedRGB,
+  rgbB: UnclampedRGB
+): boolean {
+  const minR = Math.min(rgbA.r, rgbB.r);
+  const maxR = Math.max(rgbA.r, rgbB.r);
+  const minG = Math.min(rgbA.g, rgbB.g);
+  const maxG = Math.max(rgbA.g, rgbB.g);
+  const minB = Math.min(rgbA.b, rgbB.b);
+  const maxB = Math.max(rgbA.b, rgbB.b);
 
-  render(
-    ctx: CanvasRenderingContext2D,
-    cX: number,
-    cY: number,
-    scale: number
-  ) {
-    ctx.clearRect(cX,cY, scale,scale);
-
-    const width = scale / this.colors.width;
-    const height = scale / this.colors.height;
-    
-    for (let x = 0; x < this.colors.width; x++) {
-      for (let y = 0; y < this.colors.height; y++) {
-        ctx.fillStyle = "#" + this.colors.getAt(x,y).toHex();
-        ctx.fillRect(
-          cX + x*width,
-          cY + y*height,
-          width,
-          height
-        );
-      }
-    }
-  }
-
-  getColor(x: number, y: number) { return this.colors.getAt(x,y); }
-
-  equals(other: Pattern): boolean {
-    if (this.colors.width != other.colors.width || this.colors.height != other.colors.height) return false;
-    
-    // innocent until proven guilty
-    for (let x = 0; x < this.colors.width; x++) {
-      for (let y = 0; y < this.colors.height; y++) {
-        if ( !this.colors.getAt(x,y).equals(other.colors.getAt(x,y)) ) return false;
-      }
-    }
-    return true;
-  }
-
-  getXInverted() { return new Pattern(this.colors.getXInverted()); }
-
-  getYInverted() { return new Pattern(this.colors.getYInverted()); }
+  return rgbTest.r >= minR && rgbTest.r <= maxR
+  && rgbTest.g >= minG && rgbTest.g <= maxG
+  && rgbTest.b >= minB && rgbTest.b <= maxB;
 }
 
 export class Matrix<T> {
@@ -181,6 +151,37 @@ export class Matrix<T> {
     this.data.push(row);
   }
 
+  // extend matrix by a certain factor, and return that new matrix (non-mutating)
+  extrapolate(
+    widthFactor: number,
+    heightFactor: number
+  ): Matrix<T> {
+    if (widthFactor <= 0 || Math.floor(widthFactor) != widthFactor) throw new Error(`Invalid Width Factor: ${widthFactor}`);
+    if (heightFactor <= 0 || Math.floor(heightFactor) != heightFactor) throw new Error(`Invalid Height Factor: ${heightFactor}`);
+
+    const entries: T[] = [];
+    for (let y = 0; y < this.heightQ; y++) {
+      for (let y2 = 0; y2 < heightFactor; y2++) {
+
+        for (let x = 0; x < this.widthQ; x++) {
+          for (let x2 = 0; x2 < widthFactor; x2++) {
+            entries.push(this.getAt(x,y));
+          }
+        }
+        
+      }
+    }
+    return new (Function.prototype.bind.apply(
+      Matrix<T>,
+      [].concat(
+        Matrix<T>,
+        this.widthQ*widthFactor,
+        this.heightQ*heightFactor,
+        entries
+      ))
+    );
+  }
+
   get width() { return this.widthQ; }
   get height() { return this.heightQ; }
 
@@ -243,7 +244,8 @@ interface DraggableInterface {
   onRender: () => any
   lockX?: boolean
   lockY?: boolean,
-  scale?: number
+  scale?: number,
+  doScroll?: boolean
 }
 
 export class Draggable {
@@ -273,7 +275,8 @@ export class Draggable {
     onRender = () => {},
     lockX = false,
     lockY = false,
-    scale = 40
+    scale = 40,
+    doScroll = false
   }: DraggableInterface) {
     this.el = el;
     
@@ -283,6 +286,8 @@ export class Draggable {
     el.addEventListener("mouseleave", this.onmouseup.bind(this));
     el.addEventListener("contextmenu", (e: MouseEvent) => { e.preventDefault(); })
     
+    if (doScroll) el.addEventListener("wheel", this.doScroll.bind(this));
+
     this.onClick = onClick;
     this.onRender = onRender;
 
@@ -327,6 +332,19 @@ export class Draggable {
     this.isDragging = false;
     this.isDrawing = false;
   }
+  doScroll(e: WheelEvent) {
+    if (e.deltaY > 0) { // scroll out
+      // debugger
+      this.scale *= 0.9;
+      this.offX = ((this.offX + e.pageX) * 0.9) - e.pageX;
+      this.offY = ((this.offY + e.pageY) * 0.9) - e.pageY;
+    }
+    else if (e.deltaY < 0) { // scroll in
+      this.scale /= 0.9;
+      this.offX = ((this.offX + e.pageX) / 0.9) - e.pageX;
+      this.offY = ((this.offY + e.pageY) / 0.9) - e.pageY;
+    }
+  }
 
   // turns global coords to screen coords
   transform(x: number, y: number): [x: number, y: number] {
@@ -364,7 +382,8 @@ defaultPatternMatrix.setAt(new RGB(0,0,0), 0,0);
 const defaultPattern = new Pattern( defaultPatternMatrix );
 
 export class Tile {
-  private pattern: Pattern = defaultPattern;
+  private displayPattern: CollapsedPattern = defaultPattern;
+  private actualPattern: PatternBase = defaultPattern;
   
   constructor() {
     const tileEl = document.createElement("div");
@@ -372,12 +391,14 @@ export class Tile {
   }
 
   // returns if there was a difference
-  setPattern(pattern: Pattern): boolean {
-    const oldPattern = this.pattern;
-    this.pattern = pattern;
-    return pattern != pattern;
+  setPattern(pattern: PatternBase): boolean {
+    const oldPattern = this.displayPattern;
+    this.actualPattern = pattern;
+    this.displayPattern = pattern.collapse();
+    return pattern.equals(oldPattern);
   }
-  getPattern() { return this.pattern; }
+  getPattern() { return this.actualPattern; }
+  getDisplayPattern() { return this.displayPattern; }
 
   render(
     ctx: CanvasRenderingContext2D,
@@ -385,76 +406,125 @@ export class Tile {
     cY: number,
     scale: number
   ) {
-    this.pattern.render(ctx,cX, cY, scale);
+    this.displayPattern.render(ctx,cX, cY, scale);
     // ctx.clearRect(cX,cY, scale,scale);
     // ctx.fillStyle = "#" + this.color.toHex();
     // ctx.fillRect(cX + 1, cY + 1, scale-2, scale-2);
   }
 }
 
+// constant difference ((x,y) changes to a specific tile type)
 export type cDiff = {
   x: number
   y: number
-  p: Pattern
+  p: PatternBase
 };
 
+// dynamic difference ((x,y) changes to result of a function)
 export type dDiff = {
   x: number
   y: number
-  p: () => Pattern
+  p: () => PatternBase
 };
 
-// for checking patterns within rules
-export abstract class RulePattern {
-  readonly possibilities: number;
-  constructor(possibilities: number) {
-    this.possibilities = possibilities;
-  }
-  abstract matches(pattern: Pattern): boolean;
-  abstract getPattern(): Pattern; // for after-patterns, this acts to choose one of the patterns
-  abstract getXInverted(): RulePattern;
-  abstract getYInverted(): RulePattern;
+// dynamic movement difference ((xi,yi) moves to (x,y))
+export type dmDiff = {
+  xi: number,
+  yi: number,
+  x: number,
+  y: number
 }
 
-// this can contain one pattern (match), multiple patterns (match in set), or none (match any)
-export class PatternSet extends RulePattern {
-  readonly patterns: Pattern[];
-  constructor(patterns: Pattern[]) {
-    super(patterns.length);
-    this.patterns = patterns;
+// movement difference ((xi,yi) moves to (x,y), staying the same tile [p])
+export type mDiff = {
+  xi: number,
+  yi: number,
+  x: number,
+  y: number,
+  p: CollapsedPattern
+}
 
-    // can only every match/return the same, allow for precomputation
-  }
+// result differences (deterministic)
+export type rDiff = cDiff | mDiff;
 
-  // patterns of similar shapes will have the same memory address, therefore direct comparisons can be used here
-  matches(pattern: Pattern) {
-    if (this.patterns.length == 0) return true; // no need to check
+// dynamically... dynamic diffs (multiple types of dynamic diffs)
+export type ddDiff = dDiff | dmDiff;
 
-    // guilty until proven innocent method
-    for (const testPattern of this.patterns) {
-      if (testPattern.equals(pattern)) return true;
+export function isCDiff(diff: rDiff): diff is cDiff {
+  return "x" in diff;
+}
+
+export function isMDiff(diff: rDiff): diff is mDiff {
+  return "xi" in diff;
+}
+
+
+export type AnimData = {
+  x: number,
+  y: number,
+  data: mDiff
+};
+
+// export function getLCM(
+//   a: number,
+//   b: number
+// ) {
+//   const a_factors = getFactors(a);
+//   const b_factors = getFactors(b);
+// }
+
+// // returns series of primes that multiply to get the value
+// function getFactors(
+//   value: number
+// ): number[] {
+//   if (Math.floor(value) != value) return []; // value is not an int
+
+//   const factors: number[] = [];
+//   if (value < 1) { // handle negative numbers
+//     factors.push(-1);
+//     value *= -1;
+//   }
+//   if (value <= 1) return factors; // number too small 
+
+//   let factor = 2;
+//   while (value != 1) {
+//     if (value % factor == 0) {
+//       factors.push(factor);
+//       value /= factor;
+//     }
+//     else factor++;
+//   }
+
+//   return factors;
+// }
+
+// returns integer factors to make a and b equal
+export function getLCMFactors( // slow, but works for now
+  a: number,
+  b: number
+): { a: number, b: number } {
+
+  let aMul = 1;
+  let bMul = 1;
+  
+  let aTemp = a;
+  let bTemp = b;
+  
+  while (aTemp != bTemp) {
+    if (aTemp < bTemp) { // [a] too low, increase multiplier
+      // aMul *= Math.floor(bTemp / aTemp);
+      aMul++;
+      aTemp = a * aMul;
     }
-    return false;
-  }
-
-  getPattern() {
-    if (this.patterns.length == 0) return null;
-    if (this.patterns.length == 1) return this.patterns[0];
-    return this.patterns[Math.floor(Math.random() * this.patterns.length)]; // choose random pattern
-  }
-
-  getXInverted() {
-    const patterns: Pattern[] = [];
-    for (const pattern of this.patterns) {
-      patterns.push(pattern.getXInverted());
+    else { // aTemp > bTemp // [b] too low, increase multiplier
+      // bMul *= Math.floor(aTemp / bTemp);;
+      bMul++;
+      bTemp = b * bMul;
     }
-    return new PatternSet(patterns);
   }
-  getYInverted() {
-    const patterns: Pattern[] = [];
-    for (const pattern of patterns) {
-      patterns.push(pattern.getYInverted());
-    }
-    return new PatternSet(patterns);
-  }
+  
+  return {
+    a: aMul,
+    b: bMul
+  };
 }

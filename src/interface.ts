@@ -1,4 +1,5 @@
-import { Draggable, LoopMatrix, Matrix, Pattern, RGB, Tile } from "./utils.js";
+import { CollapsedPattern, Pattern, PatternBase } from "./patterns.js";
+import { AnimData, Draggable, LoopMatrix, Matrix, RGB, Tile, mDiff } from "./utils.js";
 
 export class Element {
   readonly el: HTMLElement;
@@ -13,7 +14,8 @@ interface TileableInterface {
   tiles: Matrix<Tile>
   width?: number
   height?: number
-  padding?: number
+  padding?: number,
+  doAnimations?: boolean
 }
 
 export class Tileable extends Element {
@@ -26,6 +28,7 @@ export class Tileable extends Element {
   readonly padding: number;
 
   private clickListeners: Array<(tile: Tile) => void> = [];
+  private animationsOverlay: TileAnimations = null;
 
   readonly tiles: Matrix<Tile>;
 
@@ -33,7 +36,8 @@ export class Tileable extends Element {
     tiles,
     width = 500,
     height = 500,
-    padding = 1
+    padding = 1,
+    doAnimations = false
   }: TileableInterface) {
     // const materialsEl = document.createElement("div");
     // materialsEl.classList.add("tiles-containers");
@@ -56,7 +60,12 @@ export class Tileable extends Element {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
 
-    // this.render();
+    if (doAnimations) this.animationsOverlay = new TileAnimations(this);
+  }
+
+  appendTo(el: HTMLElement) {
+    super.appendTo(el);
+    if (this.animationsOverlay) this.animationsOverlay.appendTo(el);
   }
 
   renderTile(x: number, y: number) {
@@ -146,6 +155,11 @@ export class Tileable extends Element {
     this.el.setAttribute("width", `${this.width}px`);
     this.el.setAttribute("height", `${this.height}px`);
 
+    if (this.animationsOverlay) {
+      this.animationsOverlay.el.setAttribute("width", `${this.width}px`);
+      this.animationsOverlay.el.setAttribute("height", `${this.height}px`);
+    }
+
     if (init) {
       const shiftX = (this.width - this.tiles.width * this.draggable.scale) / 2;
       const shiftY = (this.height - this.tiles.height * this.draggable.scale) / 2;
@@ -154,13 +168,23 @@ export class Tileable extends Element {
 
     this.render();
   }
+
+  runAnimation(animations: AnimData[]) {
+    for (const anim of animations) this.animationsOverlay.pushAnimation(anim);
+  }
+
+  renderAnimation() { this.animationsOverlay.render(); }
+  setAnimationSpeed(period: number) {
+    this.animationsOverlay.setAnimationTime(period);
+  }
 }
 
 interface TilesInterface {
   cols: number
   rows: number
   padding?: number
-  looping?: boolean
+  looping?: boolean,
+  doAnimations?: boolean
 }
 
 export class Tiles extends Tileable {
@@ -168,7 +192,8 @@ export class Tiles extends Tileable {
     cols,
     rows,
     padding = 1,
-    looping = false
+    looping = false,
+    doAnimations = false
   }: TilesInterface) {
     const tiles = looping ? new LoopMatrix<Tile>(cols,rows) : new Matrix<Tile>(cols,rows);
 
@@ -180,7 +205,8 @@ export class Tiles extends Tileable {
 
     super({
       tiles,
-      padding
+      padding,
+      doAnimations
     });
 
     this.draggable = new Draggable({
@@ -189,7 +215,8 @@ export class Tiles extends Tileable {
         const tile = this.getClickedTile(e.pageX, e.pageY);
         if (tile) this.alertListeners(tile);
       },
-      onRender: this.render.bind(this)
+      onRender: this.render.bind(this),
+      doScroll: true
     });
 
     if (looping) {
@@ -209,7 +236,7 @@ export class Materials extends Tileable {
   private selectedBackground: string = "";
 
   constructor(
-    materials: Pattern[],
+    materials: PatternBase[],
     cols: number
   ) {
     const rows = Math.ceil(materials.length / cols);
@@ -244,7 +271,7 @@ export class Materials extends Tileable {
         const tile = this.getClickedTile(e.pageX, e.pageY);
         if (tile) {
           [this.selectedX,this.selectedY] = this.getClickedTileId(e.pageX, e.pageY);
-          this.selectedBackground = "#" + tile.getPattern().getColor(0,0).getContrast().toHex();
+          this.selectedBackground = "#" + tile.getDisplayPattern().getColor(0,0).getContrast().toHex();
           this.render();
         }
       },
@@ -267,7 +294,7 @@ export class Materials extends Tileable {
       const [cX, cY] = this.draggable.transform(x,y);
       const scale = this.draggable.scale;
       if (this.selectedBackground == "") {
-        this.selectedBackground = "#" + this.tiles.getAt(0,0).getPattern().getColor(0,0).getContrast().toHex();
+        this.selectedBackground = "#" + this.tiles.getAt(0,0).getDisplayPattern().getColor(0,0).getContrast().toHex();
       }
       this.ctx.fillStyle = this.selectedBackground;
 
@@ -286,5 +313,78 @@ export class Materials extends Tileable {
       this.selectedX,
       this.selectedY
     ).getPattern();
+  }
+}
+
+export class TileAnimations extends Element {
+  readonly canvas: HTMLCanvasElement;
+  readonly ctx: CanvasRenderingContext2D;
+
+  private animationTime = 100;
+  private animations: Array<{data: AnimData, start: number}> = [];
+  private underlay: Tileable;
+
+  constructor(underlay: Tileable) {
+    const canvas = document.createElement("canvas");
+    canvas.classList.add("animations");
+
+    super(canvas);
+
+    this.underlay = underlay;
+    
+    canvas.setAttribute("width", `${this.underlay.width}px`);
+    canvas.setAttribute("height", `${this.underlay.height}px`);
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+  }
+  setAnimationTime(millis: number) {
+    this.animationTime = millis;
+  }
+
+  pushAnimation(diff: AnimData) {
+    this.animations.push({
+      data: diff,
+      start: (new Date()).getTime()
+    });
+  }
+
+  render() {
+    const now = (new Date()).getTime();
+    const toRemove: number[] = [];
+    
+    this.ctx.beginPath();
+    this.ctx.clearRect(0,0, this.canvas.width, this.canvas.height);
+    for (let i in this.animations) {
+      const animation = this.animations[i];
+      if (now - animation.start > this.animationTime) { // remove this animation
+        toRemove.push(+i);
+        continue;
+      }
+      let progress = (now - animation.start) / this.animationTime; // between 0 and 1
+      
+      let x = animation.data.x + animation.data.data.xi + (animation.data.data.x - animation.data.data.xi) * progress;
+      let y = animation.data.y + animation.data.data.yi + (animation.data.data.y - animation.data.data.yi) * progress;
+
+      const [cX, cY] = this.underlay.draggable.transform(x,y);
+
+      animation.data.data.p.render(
+        this.ctx,
+        cX + this.underlay.padding,
+        cY + this.underlay.padding,
+        this.underlay.draggable.scale - 2*this.underlay.padding
+      );
+    }
+
+    this.ctx.stroke();
+
+    // loop backwards to removing from indicies doesn't affect position of other indicies
+    for (let i = toRemove.length-1; i >= 0; i--) {
+      const index = toRemove[i];
+      const animationData = this.animations[index].data;
+      const x = animationData.x + animationData.data.x;
+      const y = animationData.y + animationData.data.y;
+      this.underlay.renderTile( x,y );
+      this.animations.splice(index,1);
+    }
   }
 }

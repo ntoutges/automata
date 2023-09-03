@@ -2,7 +2,7 @@ export class SmartInterval {
   private callback: () => void;
   private timeout: number = 0;
   private iId: number = null;
-  private isPaused: boolean = false;
+  private _isPaused: boolean = false;
   private lastTick: number;
   constructor(
     callback: () => void,
@@ -16,7 +16,7 @@ export class SmartInterval {
     const oldInterval = this.timeout;
     this.timeout = interval;
 
-    if (interval > 0 && oldInterval != this.timeout && !this.isPaused) { // new and valid interval
+    if (interval > 0 && oldInterval != this.timeout && !this._isPaused) { // new and valid interval
       this.createInterval();
     }
   }
@@ -24,13 +24,15 @@ export class SmartInterval {
   pause() {
     clearInterval(this.iId);
     this.iId = null;
-    this.isPaused = true;
+    this._isPaused = true;
   }
 
   play() {
     this.createInterval();
-    this.isPaused = false;
+    this._isPaused = false;
   }
+
+  get isPaused() { return this._isPaused; }
 
   private createInterval() {
     if (this.iId != null) { // remove old interval, then replace it
