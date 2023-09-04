@@ -1,11 +1,17 @@
+import { KeyDataInterface } from "./sim.js";
 import { Matrix, RGB, UnclampedRGB, generateMonochromeRGBWithinRange, generateRGBWithinRange, getLCMFactors, isMonochromeRGBWithinRange, isRGBWithinRange } from "./utils.js";
+
+export type CollapseType = {
+  oldPattern: CollapsedPattern
+  key: KeyDataInterface
+};
 
 export abstract class PatternBase {
   abstract equals(other: PatternBase): boolean;
   abstract getXInverted(): PatternBase;
   abstract getYInverted(): PatternBase;
 
-  abstract collapse(oldPattern: CollapsedPattern): CollapsedPattern;
+  abstract collapse(data: CollapseType): CollapsedPattern;
 }
 
 export abstract class QuantumPattern extends PatternBase { // represents multiple different patterns, but is not one pattern specifically
@@ -23,7 +29,7 @@ export abstract class CollapsedPattern extends PatternBase { // represents one s
   abstract getColor(x: number, y: number): UnclampedRGB;
   getColors() { return this.colors; }
 
-  collapse(oldPattern: CollapsedPattern) { return this; } // collapsed pattern, when collapsing, just returns itself
+  collapse() { return this; } // collapsed pattern, when collapsing, just returns itself
 }
 
 export class Pattern extends CollapsedPattern {
@@ -138,6 +144,10 @@ export class PatternRange extends QuantumPattern {
     if (other instanceof CollapsedPattern) { // check if all RGB values within range
       const width = this.patternA.getColors().width;
       const height = this.patternA.getColors().height;
+
+      const otherColors = other.getColors();
+      if (otherColors.width != width || otherColors.height != height) return false; // different dimensions = difference
+
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
           if (
@@ -157,7 +167,7 @@ export class PatternRange extends QuantumPattern {
     }
   }
 
-  collapse(oldPattern: CollapsedPattern) {
+  collapse() {
     const width = this.patternA.getColors().width;
     const height = this.patternA.getColors().height;
     
@@ -200,6 +210,10 @@ export class PatternRangeMonochrome extends PatternRange {
 
       const width = patternA.getColors().width;
       const height = patternA.getColors().height;
+
+      const otherColors = other.getColors();
+      if (otherColors.width != width || otherColors.height != height) return false; // different dimensions = difference
+
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
           if (
@@ -219,7 +233,7 @@ export class PatternRangeMonochrome extends PatternRange {
     }
   }
 
-  collapse(oldPattern: CollapsedPattern) {
+  collapse() {
     const patternA = this.getPatternA();
     const patternB = this.getPatternB();
 
@@ -262,6 +276,10 @@ export class PatternAddative extends QuantumPattern {
     if (other instanceof CollapsedPattern) { // check if all RGB values within range
       const width = this.pattern.getColors().width;
       const height = this.pattern.getColors().height;
+
+      const otherColors = other.getColors();
+      if (otherColors.width != width || otherColors.height != height) return false; // different dimensions = difference
+
       for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
           const thisColor = this.pattern.getColor(x,y);
@@ -281,7 +299,9 @@ export class PatternAddative extends QuantumPattern {
     }
   }
 
-  collapse(oldPattern: CollapsedPattern) {
+  collapse({
+    oldPattern
+  }) {
     const width = this.pattern.getColors().width;
     const height = this.pattern.getColors().height;
     
@@ -305,5 +325,139 @@ export class PatternAddative extends QuantumPattern {
   }
   getYInverted() {
     return new PatternAddative( this.pattern.getYInverted() );
+  }
+}
+
+export class PatternSubtractive extends QuantumPattern {
+  private pattern: Pattern;
+
+  constructor(
+    pattern: Pattern
+  ) {
+    super();
+    this.pattern = pattern;
+  }
+
+  getPattern() { return this.pattern; }
+
+  // checks if all other pattern values >= this pattern value
+  equals(other: PatternBase) {
+    if (other instanceof CollapsedPattern) { // check if all RGB values within range
+      const width = this.pattern.getColors().width;
+      const height = this.pattern.getColors().height;
+
+      const otherColors = other.getColors();
+      if (otherColors.width != width || otherColors.height != height) return false; // different dimensions = difference
+
+      for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+          const thisColor = this.pattern.getColor(x,y);
+          const otherColor = other.getColor(x,y);
+          if (
+            otherColor.r > thisColor.g
+            || otherColor.g > thisColor.g
+            || otherColor.b > thisColor.b
+          ) return false; // component too small, therefore couldn't have been amde with this pattern
+        }
+      }
+      return true;
+    }
+    else { // other instanceof QuantumPattern // check if all same type, if so, check if same patternA and patternB values
+      if (other instanceof PatternSubtractive) return this.pattern.equals(other.getPattern());
+      return false; // not the same type of pattern, so immediatly different
+    }
+  }
+
+  collapse({
+    oldPattern
+  }) {
+    const width = this.pattern.getColors().width;
+    const height = this.pattern.getColors().height;
+    
+    const colors = new Matrix<UnclampedRGB>(width,height);
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        colors.setAt(
+          oldPattern.getColor(x,y).sub(
+            this.pattern.getColor(x,y)
+          ),
+          x,y
+        );
+      }
+    }
+
+    return new Pattern( colors );
+  }
+
+  getXInverted() {
+    return new PatternAddative( this.pattern.getXInverted() );
+  }
+  getYInverted() {
+    return new PatternAddative( this.pattern.getYInverted() );
+  }
+}
+
+export class PatternKeyed extends QuantumPattern {
+  private patterns: Record<string, PatternBase>;
+  private fallback: string;
+  private lastKey: string;
+
+  constructor(
+    pattern: Record<string, PatternBase>,
+    fallbackKey: string = null
+  ) {
+    super();
+    if (fallbackKey && !(fallbackKey in pattern)) throw new Error(`Invalid fallback value--"${fallbackKey}" does not exist in the set of patterns`);;
+
+    this.patterns = pattern;
+    this.fallback = fallbackKey;
+    this.lastKey = (this.fallback) ? this.fallback : Object.keys(pattern)[0]; // last key (by default if no fallback) is first key in patterns
+  }
+
+  getKeys() { return Object.keys(this.patterns); }
+  getPattern(key: string) { return this.patterns[key]; }
+
+  // checks if all other pattern values >= this pattern value
+  equals(other: PatternBase) {
+    if (other instanceof CollapsedPattern) {
+      // loop through all possibilities
+      for (const key in this.patterns) {
+        if (this.patterns[key].equals(other)) return true;
+      }
+      return false;
+    }
+    else { // other instanceof QuantumPattern // check if all same type, if so, check if same patternA and patternB values
+      if (other instanceof PatternKeyed) {
+        // ensure keys are the same (sort to ensure order is the same)
+        const thisKeys = this.getKeys().sort();
+        const otherKeys =  other.getKeys().sort();
+        if (thisKeys.length != otherKeys.length) return false; // different amount of keys, definitely not the same
+
+        for (let i in thisKeys) {
+          if (thisKeys[i] != otherKeys[i]) return false; // keys different
+          if (!this.patterns[thisKeys[i]].equals( other.getPattern(otherKeys[i]) )) { // patterns different
+            return false;
+          }
+        }
+      }
+      return false; // not the same type of pattern, so immediatly different
+    }
+  }
+
+  collapse(collapseData: CollapseType) {
+    const key = (collapseData.key?.key in this.patterns) ? collapseData.key.key : (this.fallback ? this.fallback : this.lastKey);
+    this.lastKey = key;
+    return this.patterns[key].collapse(collapseData);
+  }
+
+  getXInverted() {
+    const patterns: Record<string, PatternBase> = {};
+    for (let key in this.patterns) { patterns[key] = this.patterns[key].getXInverted(); }
+    return new PatternKeyed( patterns, this.fallback );
+  }
+  getYInverted() {
+    const patterns: Record<string, PatternBase> = {};
+    for (let key in this.patterns) { patterns[key] = this.patterns[key].getXInverted(); }
+    return new PatternKeyed( patterns, this.fallback );
   }
 }

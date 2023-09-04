@@ -78,3 +78,35 @@ body {
   top: 0px;
   pointer-events: none;
 }
+
+#input-value-positioner {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+#input-value {
+  width: 80px;
+  height: 80px;
+
+  background-color: #afafafc2;
+  border: black 5px solid;
+  border-radius: 10px;
+
+  font-size: 50px;
+  text-align: center;
+  color: white;
+
+  display: table-cell;
+  vertical-align: middle;
+
+  transform: scale(1);
+  transition: 50ms transform ease-in-out;
+}
+
+#input-value:empty {
+  transform: scale(0);
+}

@@ -38,6 +38,13 @@ export class UnclampedRGB {
       this.b + other.b
     );
   }
+  sub(other: UnclampedRGB) {
+    return new UnclampedRGB(
+      this.r - other.r,
+      this.g - other.g,
+      this.b - other.b
+    );
+  }
 
   equals(other: UnclampedRGB): boolean {
     return this.r == other.r && this.g == other.g && this.b == other.b;
@@ -62,6 +69,13 @@ export class RGB extends UnclampedRGB {
       this.r + other.r,
       this.g + other.g,
       this.b + other.b
+    );
+  }
+  sub(other: RGB) {
+    return new RGB(
+      this.r - other.r,
+      this.g - other.g,
+      this.b - other.b
     );
   }
 }
@@ -473,7 +487,7 @@ export class Tile {
   setPattern(pattern: PatternBase): boolean {
     const oldPattern = this.displayPattern;
     this.actualPattern = pattern;
-    this.displayPattern = pattern.collapse(oldPattern);
+    this.displayPattern = pattern.collapse({ oldPattern, key: null }); // when setting like this, act like no key has been pressed
     return pattern.equals(oldPattern);
   }
   getPattern() { return this.actualPattern; }
@@ -520,6 +534,15 @@ export type mDiff = {
   yi: number,
   x: number,
   y: number,
+  p: PatternBase
+}
+
+// strict movement difference--requires collapsed pattern
+export type smDiff = {
+  xi: number,
+  yi: number,
+  x: number,
+  y: number,
   p: CollapsedPattern
 }
 
@@ -541,8 +564,10 @@ export function isMDiff(diff: rDiff): diff is mDiff {
 export type AnimData = {
   x: number,
   y: number,
-  data: mDiff
+  data: smDiff
 };
+
+// u(nstrict)AnimData
 
 // export function getLCM(
 //   a: number,

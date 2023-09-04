@@ -3,13 +3,20 @@ import { Pattern, PatternBase } from "./patterns.js";
 import { Rule } from "./rules.js";
 import { AnimData, Matrix, Tile, isMDiff, mDiff } from "./utils.js";
 
+export interface KeyDataInterface {
+  key: string
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+};
+
 export class Simulation {
   private tiles: Matrix<Tile>;
   private rules: Rule[];
   private differences: Record<number, PatternBase> = {}; 
-  private hiddenDifferences: Set<number> = new Set<number>();
   private animations: AnimData[];
-
+  private animationQueue: Map<number,mDiff> = new Map<number,mDiff>();
+  
   private maxRuleWidth: number = 0;
   private maxRuleHeight: number = 0;
   
@@ -27,11 +34,11 @@ export class Simulation {
   }
 
   // at every coordinate, run every rule until one matches or all rules are exhausted, at which point move to the next rule
-  tickAll(): {
+  tickAll(keyData: KeyDataInterface): {
     "diffs": Array<[x: number, y: number]>,
     "anims": AnimData[]
   } {
-    this.hiddenDifferences.clear(); // stores which differences to... hide from the renderer // relies on animation system calling tile to render individually at the end of animation
+    this.animationQueue.clear(); // stores which differences to... hide from the renderer // relies on animation system calling tile to render individually at the end of animation
     this.animations = [];
 
     for (let x = -this.maxRuleWidth+1; x < this.tiles.width; x++) {
@@ -41,7 +48,7 @@ export class Simulation {
       }
     }
     
-    const diffs = this.resolveDifferences();
+    const diffs = this.resolveDifferences(keyData);
 
     return {
       "diffs": diffs,
@@ -56,25 +63,40 @@ export class Simulation {
       for (const diff of diffs) {
         const index = this.toIndex(x + diff.x, y + diff.y);
         this.differences[index] = diff.p;
-
-        if (isMDiff(diff)) {
-          this.animations.push({
-            x,y,
-            data: diff
-          });
-          this.hiddenDifferences.add(index);
-        }
+        
+        if (isMDiff(diff)) this.animationQueue.set(index, diff);
       }
     }
   }
 
   // shove all data in differences into main tiles
-  resolveDifferences() {
+  resolveDifferences(keyData: KeyDataInterface) {
     const diffArray: Array<[x: number, y: number]> = [];
     for (const index in this.differences) {
+      
       const [x,y] = this.toCoord(+index);
-      if (!this.hiddenDifferences.has(+index)) diffArray.push([x,y]); // only push difference if not being hidden
-      this.tiles.getAt( x,y, null )?.setPattern( this.differences[index].collapse(this.tiles.getAt(x,y).getDisplayPattern()) );
+      const newPattern = this.differences[index].collapse({
+        oldPattern: this.tiles.getAt(x,y).getDisplayPattern(),
+        key: keyData
+      });
+      if (this.tiles.getAt( x,y, null )?.getPattern().equals(newPattern)) { continue; } // no actual difference, this cycle can be ignored
+      
+      if (this.animationQueue.has(+index)) { // hidden/used in animation
+        const oldData = this.animationQueue.get(+index);
+        this.animations.push({
+          x: x - oldData.x,
+          y: y - oldData.y,
+          data: {
+            xi: oldData.xi,
+            yi: oldData.yi,
+            x: oldData.x,
+            y: oldData.y,
+            p: newPattern
+          }
+        });
+      }
+      else diffArray.push([x,y]); // only push difference if not being hidden
+      this.tiles.getAt( x,y, null )?.setPattern( newPattern );
     }
     this.differences = {};
     return diffArray;

@@ -1,4 +1,4 @@
-import { Pattern, QuantumPattern } from "./patterns.js";
+import { CollapsedPattern, Pattern, QuantumPattern } from "./patterns.js";
 import { RulePattern } from "./rule-patterns.js";
 import { Matrix, Tile, UnclampedRGB, cDiff, dDiff, ddDiff, dmDiff, isCDiff, mDiff, rDiff } from "./utils.js";
 
@@ -242,13 +242,12 @@ export class MovementRule extends Rule {
     // for (const constDiff of condition.constDiffs) { this.constDiffs.push(constDiff); }
     this.condition = condition;
 
-    const diff: dmDiff = {
+    this.dynaDiffs.push([{
       xi: fromX,
       yi: fromY,
       x: toX,
       y: toY 
-    };
-    this.dynaDiffs.push([diff]);
+    }]);
   }
 
   checkAt(
@@ -260,20 +259,31 @@ export class MovementRule extends Rule {
     if (rDiffs.length == 0) return []; // no differences means rule true, ignore
     
     const move = this.dynaDiffs[0][0] as dmDiff;
-    for (const i in rDiffs) { // remove rDiff that replaces tile where the moved tile will end at
-      if (rDiffs[i].x == move.x && rDiffs[i].y == move.y) {
-        rDiffs.splice(+i,1);
-        break;
-      }
-    }
-
+    
     const cDiff: mDiff = {
       xi: move.xi,
       yi: move.yi,
       x: move.x,
       y: move.y,
-      p: tiles.getAt(x+move.xi, y+move.yi).getDisplayPattern()
+      p: null
     };
+    for (const i in rDiffs) { // remove rDiff that replaces tile where the moved tile will end at
+      if (rDiffs[i].x == move.x && rDiffs[i].y == move.y) {
+        cDiff.p = rDiffs[i].p; // set to what tile will be
+        rDiffs.splice(+i,1);
+        break;
+      }
+    }
+
+    // no new tile, set to what tile was
+    // const cDiff: mDiff = {
+    //   xi: move.xi,
+    //   yi: move.yi,
+    //   x: move.x,
+    //   y: move.y,
+    // if [cDiff] not yet set, set it to what the tile was originally
+    if (cDiff.p == null) cDiff.p = tiles.getAt(x+move.xi, y+move.yi).getPattern();
+    // };
     rDiffs.push(cDiff);
     
     return rDiffs;

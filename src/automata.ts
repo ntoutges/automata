@@ -1,7 +1,7 @@
 import { Materials, TileAnimations, Tiles } from "./interface.js";
 import { Pattern } from "./patterns.js";
 import { SpatialRule, SurroundingRule } from "./rules.js";
-import { Simulation } from "./sim.js";
+import { KeyDataInterface, Simulation } from "./sim.js";
 import { SmartInterval } from "./smartInterval.js";
 import { materials, rules } from "./user-rules.js";
 import { LoopMatrix, Matrix, RGB } from "./utils.js";
@@ -26,7 +26,10 @@ let isClickingTimeout: number;
 tiles.autosize(0,0,true);
 tiles.onClick((tile) => {
   tile.setPattern(
-    materials.getSelectedPattern().collapse(nullPattern)
+    materials.getSelectedPattern().collapse({
+      oldPattern: nullPattern,
+      key: keyData
+    })
   );
   tiles.render([tiles.getClickedTileLocation()]);
   didRenderFullScreen = false;
@@ -59,16 +62,13 @@ const interval = new SmartInterval(
 
 setInterval(() => {
   tiles.renderAnimation();
-
-  if (isClicking) {
-    const [x,y] = tiles.getClickedTileLocation();
-    tiles.tiles.getAt(x,y)?.setPattern(
-      materials.getSelectedPattern().collapse(nullPattern)
-    );
-    tiles.render([tiles.getClickedTileLocation()]);
-    didRenderFullScreen = false;
-  }
 }, 10);
+
+const printableKeysStr = "abcdefghijklmnopqrstuvwxyz0123456789";
+const printableKeys: Set<string> = new Set<string>();
+for (const key of printableKeysStr) { printableKeys.add(key); }
+
+var keyData: KeyDataInterface = null;
 
 $("#play").addEventListener("click", play);
 $("#step").addEventListener("click", stepPause);
@@ -89,6 +89,25 @@ document.addEventListener("keydown", (e) => {
       $("#speed").value = Math.max($("#speed").value - speedStep, 1);
       setSpeed();
       break;
+  }
+  
+  const key = e.key.toLowerCase();
+  if (!e.repeat && printableKeys.has(key)) {
+    keyData = {
+      key: key,
+      ctrlKey: e.ctrlKey,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey
+    };
+    $("#input-value").innerText = key.toUpperCase();
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  const key = e.key.toLowerCase();
+  if (keyData && keyData.key == key) {
+    keyData = null;
+    $("#input-value").innerText = "";
   }
 });
 
@@ -115,7 +134,19 @@ function stepPause() {
 
 let didRenderFullScreen = false;
 function step() {
-  const updateData = sim.tickAll();
+  if (isClicking) {
+    const [x,y] = tiles.getClickedTileLocation();
+    tiles.tiles.getAt(x,y)?.setPattern(
+      materials.getSelectedPattern().collapse({
+        oldPattern: nullPattern,
+        key: null
+      })
+    );
+    tiles.render([tiles.getClickedTileLocation()]);
+    didRenderFullScreen = false;
+  }
+
+  const updateData = sim.tickAll(keyData);
   if (updateData.diffs.length) { // only render needed
     tiles.render(updateData.diffs);
     didRenderFullScreen = false;
